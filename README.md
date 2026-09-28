@@ -1,326 +1,181 @@
-ROS2와 AI를 활용한 **AI 기반 지능형 무인 마트 자동화 시스템**  
-(결제 이후: 작업 생성 → 로봇팔 집기/적재 → 자율주행 운반 → 비전 기반 주행 제어)
+# ROSCamp Robot Automation · 김형준 포트폴리오
 
-** Presentation:** (링크)  |  <a href="https://www.youtube.com/watch?v=Zob6Lzrnn_4">Video  Demo</a>
+ROS 2와 AI를 활용한 지능형 무인 마트 자동화 프로젝트입니다. 결제 이후 생성된 작업을 서버에서 관리하고, 로봇 시스템과 LLM 명령 처리 구조로 연결하는 팀 프로젝트에서 김형준이 담당한 서버·LLM·데이터 계층과 직접 수정한 로봇 제어 코드를 포트폴리오용으로 정리했습니다.
 
----
+<p>
+  <a href="https://github.com/kimhyounjun"><img src="https://img.shields.io/badge/GitHub-kimhyounjun-181717?style=flat-square&logo=github" alt="GitHub" /></a>
+  <img src="https://img.shields.io/badge/ROS%202-Jazzy-22314E?style=flat-square&logo=ros" alt="ROS 2" />
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/MySQL-Database-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+  <img src="https://img.shields.io/badge/OpenAI-LLM-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI" />
+</p>
 
-> 본 프로젝트는 사용자의 **결제 완료 시점부터 상품 전달까지**의 물류 과정을  
-> **로봇팔 + 자율주행 로봇 + AI 비전**으로 통합 자동화한 시스템입니다.
+## 개인 기여 범위
 
-## 프로젝트 개요
+원본 README의 팀 역할과 Git 이력을 기준으로 서버·FastAPI·MySQL·LLM 영역을 선별했습니다. 또한 Git 이력에서 김형준 이름으로 확인되는 `robot/pinky_1waypoint_567_lcd.py` 수정본을 함께 포함했습니다. 다른 팀원의 로봇팔·비전·자율주행 실험 코드는 제외했습니다.
 
-- **프로젝트명:** AI 기반 지능형 무인 마트 자동화 시스템
-- **주제:** 결제 이후 상품 배송 전 과정 로봇 자동화
-- **핵심 목표:** 결제 이후 프로세스를 하나의 자동화 파이프라인으로 연결  
-  (서버 작업 생성 → 로봇팔 피킹/적재 → Pinky 자율주행 운반 → 신호등 인식 정지)
+| 담당 영역 | 구현 내용 |
+| --- | --- |
+| FastAPI 서버 | 도메인별 API 구조, 헬스 체크, CORS, 정적 웹 연결, 서버 실행 구성 |
+| 데이터 계층 | SQLAlchemy 모델·스키마·DB 세션·환경설정 구조 |
+| LLM 라우터 | 자연어 로봇 명령을 simple/complex/dangerous로 분류하고 모델과 액션 JSON을 선택 |
+| 마트·주문 도메인 | 상품·주문·결제·사용자 모델과 LLM 질의 연동 구조 |
+| 로봇 통합 | 서버에서 로봇 동작을 호출할 수 있도록 LLM·ROS 2 연동 도메인 구성 |
+| 직접 수정 코드 | Pinky Nav2 웨이포인트 이동, LED 상태 표시, LCD 수령 안내와 복귀 대기 로직 |
 
----
+## 프로젝트 흐름
 
-## 팀 구성 및 역할
-
-| Name | Role |
-|------|------|
-| (이준호) | Manipulator(로봇팔), ArUco 인식/집기, 서버 연동 |
-| (이현서) | Manipulator(로봇팔), ArUco 인식/집기, 서버 연동 |
-| (이민정) | Mobile Robot(Nav2/AMCL), 경로/정지 제어, Localization, Goal-based Navigation |
-| (김정래) | Mobile Robot(Nav2/AMCL), 경로/정지 제어, Vision(YOLO/스트리밍), 신호등 인식 |
-| (김형준) | Server/FastAPI/MySQL, 서버 생성 |
-| (조도훈) | Server/FastAPI/MySQL, 주문/작업 생성, |
-
----
-
-## MAP
-<img width="400" height="800" alt="제목을 입력해주세요" src="https://github.com/user-attachments/assets/35a33084-b374-4e5b-a7ca-e3fea746ff4e" />
-
-
----
-
-## 기술 스택 (Tech Stack)
-
-| Category | Technology |
-|----------|------------|
-| Development Environment | Linux (Ubuntu), Raspberry Pi, ROS 2 Jazzy |
-| Language | Python |
-| AI / Vision | YOLOv8 (ultralytics), OpenCV, ArUco (DICT_4X4_50) |
-| Robot | Pinky (자율주행 AMR), JetCobot (로봇팔 MyCobot) |
-| Navigation | Nav2 (NavigateToPose), AMCL 로컬라이제이션 |
-| Server / DB | FastAPI, SQLAlchemy, MySQL |
-| Camera | PiCamera2, USB Camera (12d0, 1645) |
-| Hardware | Pinky LED/LCD, MyCobot 그리퍼 |
-| Network | REST API, ROS 2 Topic/Action/Service, SSH |
-| Collaboration | GitHub |
-
----
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         사용자 (키오스크)                         │
-│                              │                                   │
-│                         결제 완료 →                               │
-│                              ▼                                   │
-│  ┌─────────────────────────────────────────────────┐            │
-│  │              FastAPI 서버 (작업 생성)              │            │
-│  │    주문 확정 → 로봇팔 트리거 → AMR 트리거           │            │
-│  └──────────┬──────────────────────┬───────────────┘            │
-│             │                      │                             │
-│        ① ROS 2 토픽           ② SSH 원격 실행                   │
-│             │                      │                             │
-│             ▼                      ▼                             │
-│  ┌──────────────────┐   ┌──────────────────────────┐           │
-│  │  JetCobot 로봇팔   │   │     Pinky 자율주행 로봇     │           │
-│  │                    │   │                          │           │
-│  │  · ArUco 6D 인식   │   │  · Nav2 웨이포인트 주행    │           │
-│  │  · Pick & Place   │   │  · AMCL 위치 추정         │           │
-│  │  · 적재 완료 통보   │   │  · YOLO 신호등 인식       │           │
-│  │                    │   │  · LCD/LED 상태 표시      │           │
-│  └──────────────────┘   └──────────────────────────┘           │
-└─────────────────────────────────────────────────────────────────┘
+```text
+사용자 결제
+    ↓
+FastAPI 서버에서 주문·작업 생성
+    ↓
+LLM 라우터가 자연어 명령을 안전한 액션 JSON으로 변환
+    ↓
+ROS 2 로봇 도메인과 연동
+    ↓
+Pinky 웨이포인트 이동·상태 표시
+    ↓
+목적지 도착 후 LCD 안내 및 복귀 대기
 ```
 
----
+## 파일 구조
 
-## Implements
-
-### Scenario (End-to-End)
-
-```
-① 사용자 GUI 결제 → 서버 주문 확정
-     ↓
-② 서버가 작업 생성 → 로봇팔 트리거 (ROS 2 / SSH)
-     ↓
-③ 로봇팔: ArUco 마커 인식 → 상품 집기 → Pinky에 적재
-     ↓
-④ 서버가 Pinky 이동 작업 트리거
-     ↓
-⑤ Pinky: 경로 주행 → 신호등 감지 시 정지/재개 → 목적지 도착
-     ↓
-⑥ LCD에 도착 안내 + LED 색상 표시
-```
-
-
----
-
-## Visual Perception
-
-### 신호등 인식 (traffic_light_yolo_stream.py)
-
-**YOLOv8 + HSV 이중 검증**으로 오검출을 방지합니다.
-
-| 단계 | 처리 | 설명 |
-|:---:|---|---|
-| 1 | YOLOv8n 객체 탐지 | `traffic light` 클래스 검출 (conf ≥ 0.25) |
-| 2 | ROI 추출 | 검출 박스 중앙 60% 영역만 사용 |
-| 3 | HSV 색상 분석 | 빨강/초록 픽셀 비율 계산 |
-| 4 | 연속 프레임 확인 | 빨강 1프레임, 초록 3프레임 연속 시 확정 |
-| 5 | 상태 발행 | `/traffic_light_state` 토픽으로 "red"/"green" 발행 |
-
-```
-PiCamera2 → YOLOv8n → HSV 색상 판별 → /traffic_light_state 발행
-                                            ↓
-                              빨강 → /cmd_vel 0,0 (즉시 정지)
-                              초록 → Nav2 제어 복원
+```text
+roscamp-robot-automation-portfolio/
+├── fastapi-server/                         # 메인 FastAPI 서버
+│   ├── app/
+│   │   ├── api/                            # 도메인별 API 라우터
+│   │   ├── core/                           # 설정·로깅
+│   │   ├── db/                             # DB 세션·초기화
+│   │   ├── models/                         # 사용자·상품·주문·결제 모델
+│   │   ├── schemas/                        # API 요청·응답 스키마
+│   │   └── services/                       # LLM 서비스·라우팅 로직
+│   ├── run.py                              # 서버 실행 진입점
+│   └── requirements.txt                    # 서버 의존성
+├── llm-router/                              # 독립 실행형 LLM 로봇 명령 라우터
+│   ├── main.py                              # 명령 분류·모델 선택·액션 JSON 생성
+│   └── run.sh                               # 라우터 실행 스크립트
+├── AImarket.py                              # 마트·주문·로봇 연동 애플리케이션
+├── AImarketdb.py                            # 마트 DB 연결·조회 모듈
+├── robot/
+│   └── pinky_1waypoint_567_lcd.py           # 직접 수정한 Pinky 이동·LED·LCD 제어
+├── .env.example                             # 환경변수 설정 예시
+└── requirements.txt                          # 공통 Python 의존성
 ```
 
-- **Flask 웹 스트리밍:** `http://PINKY_IP:5000/video` 로 실시간 영상 확인
-- **LED 연동:** 빨간불/초록불에 따라 Pinky LED 색상 자동 변경
-<img width="300" height="300" alt="스크린샷 2026-02-25 12-22-47" src="https://github.com/user-attachments/assets/ec53e9c8-c5d4-4b84-9afc-9f55be888cce" />
-<img width="300" height="300" alt="스크린샷 2026-02-25 12-22-59" src="https://github.com/user-attachments/assets/58833a70-f604-49ea-af3b-5ac6e834b937" />
+## 핵심 구현
 
-### ArUco 마커 6D Pose 추정
+### 1. 도메인 분리형 FastAPI 서버
 
-| 카메라 | 스크립트 | fx | fy | cx | cy |
-|---|---|---|---|---|---|
-| 12d0 | step3_aruco_live.py | 861.1 | 865.2 | 397.2 | 190.9 |
-| 1645 | step5_aruco_live_6d.py | 992.3 | 991.2 | 366.2 | 238.0 |
+`fastapi-server/app/main.py`는 서버의 진입점으로 다음 영역을 분리해 연결합니다.
 
-- **마커 크기:** 3cm (DICT_4X4_50)
-- **출력:** 마커 ID, XYZ 위치(cm), Roll/Pitch/Yaw 각도(°)
-<img width="300" height="300" alt="스크린샷 2026-02-24 15-12-03" src="https://github.com/user-attachments/assets/5ef80ba8-c5b3-46d3-bae9-8eeb6a3662b6" />
-<img width="300" height="300" alt="Screenshot from 2026-02-24 11-39-02" src="https://github.com/user-attachments/assets/ec1a0a33-1609-4d2a-8043-3286dab65ee3" />
+| 도메인 | 역할 |
+| --- | --- |
+| Main | 사용자·상품·주문·결제 등 마트 비즈니스 처리 |
+| Control | 시스템 상태와 운영 모니터링 |
+| LLM | 자연어 명령과 로봇 제어 액션 연결 |
+| Robot | ArUco·로봇 동작 요청을 ROS 2 영역과 연결 |
 
----
+서버는 CORS 설정, 환경별 설정, 구조화 로깅, 정적 웹 화면 제공, 헬스 체크를 포함하도록 구성했습니다.
 
-## Mobile Robot (Pinky)
+### 2. 데이터 모델과 환경 설정
 
-### Nav2 자율주행
+- `app/models/`: 사용자·상품·주문·결제 SQLAlchemy 모델
+- `app/schemas/`: Pydantic 기반 요청·응답 검증
+- `app/db/session.py`: 데이터베이스 엔진과 세션 관리
+- `app/core/config.py`: DB URL, OpenAI 키, CORS 등 환경변수 관리
+- `app/db/init_db.py`: 초기 데이터베이스 구성
 
-| 스크립트 | 경유 웨이포인트 | 특수 기능 |
-|---|---|---|
-| `waypoint_124.py` | 1 → 2 → 4 | 기본 웨이포인트 이동 |
-| `route_567.py` | 5 → 6 → 7 | **신호등 인식 연동** (빨간불 자동 정지) |
-| `waypoint_lcd.py` | 3개 지점 | **LCD 화면 표시 + LED 색상 제어** |
+민감 정보는 `.env`로 분리하고 `.env.example`에는 설정 형식만 남겼습니다.
 
-**route_567.py 신호등 브레이크:**
-```
-/traffic_light_state 구독
-  ├─ "red"   → /cmd_vel에 0 속도 즉시 발행 (Nav2 덮어쓰기)
-  └─ "green" → 정지 해제 → Nav2가 경로 제어 재개
-```
+### 3. LLM 기반 로봇 명령 라우터
 
-**waypoint_lcd.py 동작:**
-```
-① LED 서버 자동 실행 (pinky_led)
-② LCD에 현재 상태 표시 (이동 중 / 도착)
-③ 웨이포인트 순차 이동
-④ 각 지점 도착 시 LED 색상 변경
-⑤ 전체 완료 시 LCD에 완료 메시지
+`llm-router/main.py`는 사용자의 자연어 명령을 바로 로봇에 전달하지 않고, 먼저 의도를 분류한 뒤 구조화된 액션으로 변환합니다.
+
+```text
+자연어 명령
+    ↓
+위험도·복잡도 분류
+    ├── simple    → 빠른 모델
+    ├── complex   → 고성능 모델
+    └── dangerous → 안전 규칙을 적용한 제한 처리
+    ↓
+ActionJSON(type, params)
 ```
 
-### AMCL 자동 로컬라이제이션 (auto_spin_localize.py)
+지원하는 대표 액션은 `move_twist`, `set_led`, `set_emotion`, `noop`이며, 이동 속도·회전 속도·실행 시간의 범위를 검증하도록 설계했습니다.
 
-AMCL의 공분산이 수렴할 때까지 **자동 제자리 회전**하여 위치를 추정합니다.
+### 4. Pinky 웨이포인트·상태 표시
 
-| 파라미터 | 값 | 설명 |
-|---|:---:|---|
-| 회전 속도 | 0.6 rad/s | 제자리 회전 |
-| 최대 시간 | 35초 | 타임아웃 |
-| XY 공분산 임계값 | 0.05 m² | 위치 수렴 기준 |
-| Yaw 공분산 임계값 | 0.20 rad² | 방향 수렴 기준 |
-| 안정 시간 | 1.5초 | 임계값 유지 시간 |
+`robot/pinky_1waypoint_567_lcd.py`는 김형준 이름으로 커밋된 직접 수정 코드입니다.
 
-```
-① /reinitialize_global_localization 서비스 호출
-② /cmd_vel로 회전 시작
-③ /amcl_pose 구독 → 공분산 모니터링
-④ XY/Yaw 공분산이 임계값 이하 1.5초 유지 → 수렴 완료, 정지
-```
-<img width="239" height="146" alt="스크린샷 2026-02-25 12-26-42" src="https://github.com/user-attachments/assets/50a9c441-8437-4b76-adbc-abd44302185f" /> 
-<img width="239" height="146" alt="스크린샷 2026-02-25 12-26-51" src="https://github.com/user-attachments/assets/3a2d79f6-0faa-43e8-9119-d8c85e0c3b71" />
+- Nav2 `NavigateToPose` 액션 클라이언트로 웨이포인트 순차 이동
+- 특정 웨이포인트에서 LED를 빨간색으로 표시하고 대기
+- 목적지 도착 시 LCD에 상품 수령 안내 표시
+- 수령 대기 시간이 지나면 첫 웨이포인트로 복귀
+- 액션 성공·실패 상태와 이동 중 상태를 내부 플래그로 관리
 
----
+## 기술 스택
 
-## Manipulator (JetCobot)
+| 구분 | 기술 | 사용 목적 |
+| --- | --- | --- |
+| Robot Platform | ROS 2 Jazzy, Pinky, JetCobot | 로봇 시스템 연동 |
+| Backend | Python, FastAPI, Uvicorn | API 서버와 작업 관리 |
+| Database | MySQL, SQLAlchemy | 사용자·상품·주문·결제 데이터 |
+| Validation | Pydantic | API 요청·응답 검증 |
+| AI | OpenAI API | 자연어 명령 해석과 액션 생성 |
+| Robot Control | Nav2, ROS 2 Action, ROS 2 Topic/Service | 이동·상태 제어 |
+| UI | LCD, LED, Static Web | 사용자 안내와 로봇 상태 표시 |
 
-### 카메라 캘리브레이션
+## 실행 방법
 
-| 스크립트 | 기능 |
-|---|---|
-| `calibrate_camera.py` | 체커보드 이미지로 카메라 매트릭스, 왜곡 계수 계산 |
-
-### ArUco 기반 Pick & Place
-
-| 스크립트 | 대상 마커 | 기능 |
-|---|---|---|
-| `step1_aruco_check.py` | 6, 37번 | 다중 마커 순차 픽앤플레이스 |
-| `check.py` | 7번 | 단일 마커 픽앤플레이스 테스트 |
-
-**픽앤플레이스 동작 순서:**
-
-```
-① 시작 위치(START)로 이동
-     ↓
-② 카메라로 ArUco 마커 검출
-   (안정 8프레임 연속 + 5초 타임아웃)
-     ↓
-③ 마커 ID → 해당 픽 좌표로 접근
-   (위쪽 70mm → 목표 좌표)
-     ↓
-④ 그리퍼 닫기 (물건 잡기)
-     ↓
-⑤ 위로 90mm 들어올리기
-     ↓
-⑥ 드롭 좌표(DROP)로 이동
-     ↓
-⑦ 그리퍼 열기 (물건 놓기)
-     ↓
-⑧ 시작 위치로 복귀 → 다음 마커 반복
-```
-
----
-
-## ROS 2 토픽/서비스/액션
-
-| 이름 | 타입 | 용도 |
-|---|---|---|
-| `/cmd_vel` | `Twist` | 로봇 속도 제어 |
-| `/navigate_to_pose` | `NavigateToPose` (액션) | 웨이포인트 자율주행 |
-| `/amcl_pose` | `PoseWithCovarianceStamped` | AMCL 위치 추정 결과 |
-| `/traffic_light_state` | `String` | 신호등 상태 ("red"/"green") |
-| `/reinitialize_global_localization` | `Empty` (서비스) | AMCL 글로벌 초기화 |
-| `set_led` | `SetLed` (서비스) | Pinky LED 색상 제어 |
-
----
-
-## 파일 구조 (총 11개)
-
-```
-ros2/
-├── mobile_robot/                            # 자율주행 로봇 (Pinky AMR)
-│   ├── navigation/
-│   │   ├── waypoint_123.py                  #   웨이포인트 1→2→3
-│   │   ├── waypoint_124.py                  #   웨이포인트 1→2→4 (최신 좌표)
-│   │   ├── route_567.py                     #   경로 5→6→7 + 신호등 브레이크
-│   │   └── waypoint_lcd.py                  #   이동 + LCD 표시 + LED 제어
-│   ├── localization/
-│   │   └── auto_spin_localize.py            #   AMCL 자동 회전 로컬라이제이션
-│   └── vision/
-│       └── traffic_light_yolo_stream.py     #   YOLOv8 신호등 + Flask 스트리밍
-│
-└── manipulator/                             # 로봇팔 (JetCobot)
-    ├── calibration/
-    │   ├── calibrate_camera.py              #   체커보드 캘리브레이션
-    │   └── check.py                         #   마커 7번 픽앤플레이스 테스트
-    └── aruco_detection/
-        ├── step1_aruco_check.py             #   마커 6,37 픽앤플레이스
-        ├── step3_aruco_live.py              #   ArUco 6D 포즈 (카메라 12d0)
-        └── step5_aruco_live_6d.py           #   ArUco 6D 포즈 (카메라 1645)
-```
-
----
-
-## How to Run
+### FastAPI 서버
 
 ```bash
-# ── Server ──
-cd server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# ── Manipulator (JetCobot에서 실행) ──
-# ArUco 실시간 확인
-python3 ros2/manipulator/aruco_detection/step3_aruco_live.py
-
-# 픽앤플레이스 실행
-python3 ros2/manipulator/aruco_detection/step1_aruco_check.py
-
-# ── Mobile Robot (Pinky에서 실행) ──
-# 로컬라이제이션
-python3 ros2/mobile_robot/localization/auto_spin_localize.py
-
-# 신호등 인식 (별도 터미널)
-python3 ros2/mobile_robot/vision/traffic_light_yolo_stream.py
-
-# 네비게이션
-python3 ros2/mobile_robot/navigation/route_567.py
+cd fastapi-server
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python run.py
 ```
 
----
+### LLM 라우터
 
-## Project Schedule
-
-- **기간:** 2025.12.29 ~ 2026.02.27
-
-<!-- 간트차트 이미지가 있으면 아래에 넣기 -->
-<!-- ![Project Schedule](docs/images/gantt_chart.png) -->
-
----
-
-## 의존성
-
+```bash
+cd llm-router
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+./run.sh
 ```
-# ROS 2 패키지
-ros2 (Jazzy), nav2_msgs, geometry_msgs, std_msgs, std_srvs
-pinky_interfaces, pinky_led, pinky_lcd
 
-# Python 패키지
-opencv-python / opencv-contrib-python
-numpy
-pymycobot
-ultralytics (YOLOv8)
-picamera2
-flask
-pillow
-fastapi, uvicorn, sqlalchemy, pymysql
+### Pinky 제어 코드
+
+`robot/pinky_1waypoint_567_lcd.py`는 ROS 2와 Pinky 전용 패키지가 설치된 로봇 환경에서 실행합니다.
+
+```bash
+python3 robot/pinky_1waypoint_567_lcd.py
 ```
+
+실제 실행 전 ROS 2 환경, `pinky_interfaces`, `pinky_lcd`, Nav2 액션 서버와 LED 서비스를 확인해야 합니다.
+
+## 포트폴리오 확인 포인트
+
+1. `fastapi-server/app/main.py`에서 서버 도메인 분리와 API 진입 구조를 확인할 수 있습니다.
+2. `fastapi-server/app/core`, `app/db`, `app/models`, `app/schemas`에서 백엔드 기본 구조를 확인할 수 있습니다.
+3. `llm-router/main.py`에서 자연어 명령 분류와 안전한 액션 JSON 변환을 확인할 수 있습니다.
+4. `robot/pinky_1waypoint_567_lcd.py`에서 Nav2 이동·LED·LCD 상태 제어를 확인할 수 있습니다.
+
+## 보안 및 범위
+
+- API 키, DB 비밀번호, 로봇 IP와 SSH 비밀번호는 환경변수로 관리합니다.
+- 다른 팀원이 담당한 로봇팔·카메라 캘리브레이션·YOLO 신호등·AMCL 실험 코드는 이 저장소에서 제외했습니다.
+- 원본 팀 저장소의 전체 구현은 아래 링크에서 확인할 수 있습니다.
+
+## 관련 링크
+
+- 개인 GitHub: [kimhyounjun](https://github.com/kimhyounjun)
+- 원본 팀 저장소: [roscamp-repo-1](https://github.com/addinedu-roscamp-9th/roscamp-repo-1)
